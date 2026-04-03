@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 聊天室</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; height: 100vh; }
+        .container { display: flex; height: 100vh; }
+        .sidebar { width: 350px; background: #16213e; padding: 20px; overflow-y: auto; border-right: 1px solid #0f3460; }
+        .main { flex: 1; display: flex; flex-direction: column; }
+        .header { background: #16213e; padding: 20px; border-bottom: 1px solid #0f3460; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; color: #e94560; }
+        .auto-talk-toggle { display: flex; align-items: center; gap: 10px; }
+        .chat-area { flex: 1; overflow-y: auto; padding: 20px; }
+        .input-area { background: #16213e; padding: 20px; border-top: 1px solid #0f3460; }
+        .message { margin-bottom: 20px; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message-header { display: flex; align-items: center; margin-bottom: 8px; }
+        .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-right: 10px; background: #e94560; }
+        .avatar.user { background: #4a90d9; }
+        .sender-name { font-weight: bold; color: #e94560; }
+        .message-content { background: #1f2937; padding: 15px; border-radius: 10px; line-height: 1.6; white-space: pre-wrap; }
+        .character-item { background: #1f2937; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        .character-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .character-actions { display: flex; align-items: center; gap: 8px; }
+        .character-toggles { display: flex; align-items: center; gap: 8px; }
+        .char-name { font-weight: bold; margin-left: 8px; }
+        .char-enabled { font-size: 12px; color: #28a745; margin-left: 8px; }
+        .edit-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid #0f3460; }
+        .edit-form textarea { min-height: 60px; margin-bottom: 8px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .btn-primary { background: #e94560; color: white; }
+        .btn-primary:hover { background: #d63850; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .toggle-switch { position: relative; width: 50px; height: 26px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #0f3460; transition: 0.3s; border-radius: 26px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%; }
+        input:checked + .slider { background: #28a745; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #aaa; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 5px; background: #1f2937; color: #eee; font-size: 14px; }
+        .form-group textarea { resize: vertical; min-height: 100px; }
+        .chat-input { width: 100%; padding: 15px; border: 1px solid #0f3460; border-radius: 10px; background: #1f2937; color: #eee; font-size: 16px; }
+        .loading { display: none; color: #e94560; margin-top: 10px; font-size: 14px; }
+        .section-title { font-size: 16px; margin: 20px 0 10px; color: #e94560; }
+        .empty-state { text-align: center; padding: 50px; color: #888; }
+        .status-indicator { font-size: 12px; color: #888; }
+        .thinking { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2 style="margin-bottom: 20px;">🤖 AI 角色管理</h2>
+            <button class="btn btn-primary" onclick="toggleForm()" style="width: 100%;">➕ 添加新角色</button>
+            
+            <div id="addForm" style="display: none; margin-top: 20px;">
+                <div class="form-group">
+                    <label>角色名称</label>
+                    <input type="text" id="charName" placeholder="例如：小爱同学">
+                </div>
+                <div class="form-group">
+                    <label>头像</label>
+                    <select id="charAvatar">
+                        <option value="🤖">🤖 机器人</option>
+                        <option value="👾">👾 像素</option>
+                        <option value="🦊">🦊 狐狸</option>
+                        <option value="🐱">🐱 猫</option>
+                        <option value="🐶">🐶 狗</option>
+                        <option value="🦁">🦁 狮子</option>
+                        <option value="🐼">🐼 熊猫</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>角色人设 (System Prompt)</label>
+                    <textarea id="charPrompt" placeholder="定义这个AI角色的性格、说话风格..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>API URL</label>
+                    <input type="text" id="charApiUrl" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="charApiKey" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label>模型名称</label>
+                    <input type="text" id="charModel" placeholder="gpt-4o-mini, glm-4-flash 等">
+                </div>
+                <button class="btn btn-primary" onclick="addCharacter()" style="width: 100%;">添加角色</button>
+            </div>
+            
+            <div class="section-title">已添加的角色</div>
+            <div id="charactersList"></div>
+        </div>
+        
+        <div class="main">
+            <div class="header">
+                <h1>💬 AI 聊天室</h1>
+                <div class="auto-talk-toggle">
+                    <span class="status-indicator">🤖 主动聊天</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoTalkSwitch" onchange="toggleAutoTalk()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="chat-area" id="chatArea">
+                <div class="empty-state">
+                    <p>👈 请先添加并启用 AI 角色</p>
+                    <p>然后在下方输入消息开始聊天</p>
+                </div>
+            </div>
+            <div class="input-area">
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" class="chat-input" id="messageInput" placeholder="输入消息..." onkeypress="handleKeyPress(event)">
+                    <button class="btn btn-primary" onclick="sendMessage()">发送</button>
+                </div>
+                <div class="loading" id="loading">🤖 AI 正在回复...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let characters = [];
+        let autoTalkEnabled = false;
+        let autoTalkTimer = null;
+        
+        function loadCharacters() {
+            fetch('/api/characters').then(res => res.json()).then(data => {
+                characters = data;
+                renderCharacters();
+            });
+        }
+        
+        function renderCharacters() {
+            const list = document.getElementById('charactersList');
+            list.innerHTML = characters.map(char => `
+                <div class="character-item" id="char-${char.id}">
+                    <div class="character-info">
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 24px;">${char.avatar}</span>
+                            <span class="char-name">${char.name}</span>
+                            ${char.enabled ? '<span class="char-enabled">● 在线</span>' : '<span style="font-size: 12px; color: #666; margin-left: 8px;">○ 离线</span>'}
+                        </div>
+                        <div class="character-actions">
+                            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="toggleEditForm('${char.id}')">✏️</button>
+                            <button class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;" onclick="deleteCharacter('${char.id}')">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="character-toggles">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${char.enabled ? 'checked' : ''} onchange="toggleCharacter('${char.id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size: 12px; color: #888;">启用</span>
+                    </div>
+                    <div class="edit-form" id="edit-form-${char.id}" style="display: none;">
+                        <div class="form-group">
+                            <label>角色人设</label>
+                            <textarea id="prompt-${char.id}">${escapeHtml(char.system_prompt || '')}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>API URL</label>
+                            <input type="text" id="apiurl-${char.id}" value="${escapeHtml(char.api_url || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>API Key</label>
+                            <input type="password" id="apikey-${char.id}" value="${escapeHtml(char.api_key || '')}">
+                        </div>
+                        <div class="form-group">
+                            <label>模型</label>
+                            <input type="text" id="model-${char.id}" value="${escapeHtml(char.model || '')}">
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-success" style="flex: 1;" onclick="saveCharacter('${char.id}')">保存</button>
+                            <button class="btn btn-secondary" style="flex: 1;" onclick="toggleEditForm('${char.id}')">取消</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function toggleForm() {
+            const form = document.getElementById('addForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function addCharacter() {
+            const data = {
+                id: Date.now().toString(),
+                name: document.getElementById('charName').value,
+                avatar: document.getElementById('charAvatar').value,
+                system_prompt: document.getElementById('charPrompt').value,
+                api_url: document.getElementById('charApiUrl').value,
+                api_key: document.getElementById('charApiKey').value,
+                model: document.getElementById('charModel').value
+            };
+            
+            if (!data.name || !data.system_prompt || !data.api_url || !data.api_key || !data.model) {
+                alert('请填写所有字段');
+                return;
+            }
+            
+            fetch('/api/characters', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(() => {
+                loadCharacters();
+                toggleForm();
+                document.getElementById('charName').value = '';
+                document.getElementById('charPrompt').value = '';
+                document.getElementById('charApiUrl').value = '';
+                document.getElementById('charApiKey').value = '';
+                document.getElementById('charModel').value = '';
+            });
+        }
+        
+        function toggleCharacter(id, enabled) {
+            const char = characters.find(c => c.id === id);
+            if (char) {
+                char.enabled = enabled;
+                fetch(`/api/characters/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enabled: enabled})
+                }).then(() => loadCharacters());
+            }
+        }
+        
+        function toggleEditForm(id) {
+            const form = document.getElementById(`edit-form-${id}`);
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function saveCharacter(id) {
+            const newPrompt = document.getElementById(`prompt-${id}`).value;
+            const newApiUrl = document.getElementById(`apiurl-${id}`).value;
+            const newApiKey = document.getElementById(`apikey-${id}`).value;
+            const newModel = document.getElementById(`model-${id}`).value;
+            
+            if (!newApiUrl || !newApiKey || !newModel) {
+                alert('请填写完整的API信息');
+                return;
+            }
+            
+            fetch(`/api/characters/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    system_prompt: newPrompt,
+                    api_url: newApiUrl,
+                    api_key: newApiKey,
+                    model: newModel
+                })
+            }).then(() => {
+                loadCharacters();
+                toggleEditForm(id);
+            });
+        }
+        
+        function deleteCharacter(id) {
+            if (!confirm('确定删除这个角色?')) return;
+            fetch(`/api/characters/${id}`, {method: 'DELETE'}).then(() => loadCharacters());
+        }
+        
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        
+        function toggleAutoTalk() {
+            autoTalkEnabled = document.getElementById('autoTalkSwitch').checked;
+            
+            if (autoTalkEnabled) {
+                scheduleNextTalk();
+            } else {
+                if (autoTalkTimer) {
+                    clearTimeout(autoTalkTimer);
+                    autoTalkTimer = null;
+                }
+            }
+        }
+        
+        function scheduleNextTalk() {
+            if (!autoTalkEnabled) return;
+            
+            const delay = Math.floor(Math.random() * 2000) + 3000;
+            autoTalkTimer = setTimeout(() => {
+                triggerAIAutoTalk();
+            }, delay);
+        }
+        
+        function triggerAIAutoTalk() {
+            if (!autoTalkEnabled) return;
+            
+            const enabledChars = characters.filter(c => c.enabled).map(c => c.id);
+            if (enabledChars.length === 0) {
+                scheduleNextTalk();
+                return;
+            }
+            
+            document.getElementById('loading').textContent = '🤖 AI 正在思考...';
+            document.getElementById('loading').style.display = 'block';
+            
+            fetch('/api/ai_talk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled_chars: enabledChars})
+            }).then(res => res.json()).then(data => {
+                document.getElementById('loading').style.display = 'none';
+                data.responses.forEach(resp => {
+                    addMessageToChat('assistant', resp.content, resp.name, resp.avatar);
+                });
+                scheduleNextTalk();
+            }).catch(err => {
+                document.getElementById('loading').style.display = 'none';
+                scheduleNextTalk();
+            });
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            const enabledChars = characters.filter(c => c.enabled).map(c => c.id);
+            if (enabledChars.length === 0) {
+                alert('请至少启用一个 AI 角色');
+                return;
+            }
+            
+            addMessageToChat('user', message);
+            input.value = '';
+            document.getElementById('loading').style.display = 'block';
+            
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message, enabled_chars: enabledChars})
+            }).then(res => res.json()).then(data => {
+                document.getElementById('loading').style.display = 'none';
+                data.responses.forEach(resp => {
+                    addMessageToChat('assistant', resp.content, resp.name, resp.avatar);
+                });
+            }).catch(err => {
+                document.getElementById('loading').style.display = 'none';
+                alert('请求失败: ' + err);
+            });
+        }
+        
+        function addMessageToChat(role, content, name = '', avatar = '') {
+            const chatArea = document.getElementById('chatArea');
+            const emptyState = chatArea.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+            
+            const msg = document.createElement('div');
+            msg.className = `message ${role}`;
+            
+            if (role === 'user') {
+                msg.innerHTML = `
+                    <div class="message-header">
+                        <div class="avatar user">👤</div>
+                        <span class="sender-name">你</span>
+                    </div>
+                    <div class="message-content">${escapeHtml(content)}</div>
+                `;
+            } else {
+                msg.innerHTML = `
+                    <div class="message-header">
+                        <div class="avatar">${avatar}</div>
+                        <span class="sender-name">${name}</span>
+                    </div>
+                    <div class="message-content">${escapeHtml(content)}</div>
+                `;
+            }
+            
+            chatArea.appendChild(msg);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        loadCharacters();
+    </script>
+</body>
+</html>
